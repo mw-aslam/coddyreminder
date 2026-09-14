@@ -257,7 +257,7 @@ async function handleGroupSelection(ctx) {
   const session = getSession(userId);
 
   if (!session || session.step !== 'await_group') {
-    await ctx.answerCbQuery();
+    await ctx.answerCbQuery().catch(() => {});
     return;
   }
 
@@ -275,23 +275,20 @@ async function handleGroupSelection(ctx) {
       username: ctx.from.username
     });
   } else {
-    const groupId = parseInt(selection);
-    session.groupId = groupId;
+    session.groupId = selection;
     const groupResult = await buildGroupKeyboard(lang, userId);
-    const group = groupResult.groups.find((g) => g.telegram_group_id === groupId);
-    session.groupTitle = group ? group.title : `Group ${groupId}`;
+    const group = groupResult.groups.find((g) => String(g.telegram_group_id) === String(selection));
+    session.groupTitle = group ? group.title : `Group ${selection}`;
   }
 
   session.step = 'await_confirm';
   session.history.push({ step: 'await_group', msg: selection });
 
   const timezone = ctx.dbUser?.timezone || 'Asia/Tashkent';
-  const displayDate = session.remindAt.tz(timezone).format('DD.MM.YYYY');
-  const displayTime = session.remindAt.tz(timezone).format('HH:mm');
-  const recurrenceText = session.recurrence === 'none' ? t(lang, 'rec_none') :
-                         session.recurrence === 'daily' ? t(lang, 'rec_daily') :
-                         session.recurrence === 'weekdays' ? t(lang, 'rec_weekdays') :
-                         session.recurrence === 'weekly' ? t(lang, 'rec_weekly') : session.recurrence;
+  const moment = require('moment-timezone');
+  const remindMoment = moment.isMoment(session.remindAt) ? session.remindAt : moment(session.remindAt);
+  const displayDate = remindMoment.tz(timezone).format('DD.MM.YYYY');
+  const displayTime = remindMoment.tz(timezone).format('HH:mm');
 
   await ctx.editMessageText(
     `${t(lang, 'confirm_title')}\n\n` +
@@ -304,9 +301,11 @@ async function handleGroupSelection(ctx) {
       parse_mode: 'Markdown',
       ...buildConfirmKeyboard(lang),
     }
-  );
+  ).catch((err) => {
+    if (!err.message.includes('message is not modified')) throw err;
+  });
 
-  await ctx.answerCbQuery();
+  await ctx.answerCbQuery().catch(() => {});
 }
 
 async function handleConfirmation(ctx) {
@@ -315,16 +314,19 @@ async function handleConfirmation(ctx) {
   const session = getSession(userId);
 
   if (!session || session.step !== 'await_confirm') {
-    await ctx.answerCbQuery();
+    await ctx.answerCbQuery().catch(() => {});
     return;
   }
 
   try {
+    const moment = require('moment-timezone');
+    const remindMoment = moment.isMoment(session.remindAt) ? session.remindAt : moment(session.remindAt);
+
     const reminder = await reminderService.createReminder(ctx.telegram, {
       userId,
       groupId: session.groupId,
       text: session.reminderText,
-      remindAt: session.remindAt.toDate(),
+      remindAt: remindMoment.toDate(),
       recurrence: session.recurrence || 'none',
     });
 
@@ -334,21 +336,21 @@ async function handleConfirmation(ctx) {
       t(lang, 'success', {
         id: reminder.id,
         text: session.reminderText,
-        date: session.remindAt.tz(timezone).format('DD.MM.YYYY'),
-        time: session.remindAt.tz(timezone).format('HH:mm'),
+        date: remindMoment.tz(timezone).format('DD.MM.YYYY'),
+        time: remindMoment.tz(timezone).format('HH:mm'),
         target: session.groupTitle
       }),
       { parse_mode: 'Markdown' }
-    );
+    ).catch(() => {});
 
     logger.info(`User ${userId} confirmed reminder #${reminder.id}`);
   } catch (err) {
     logger.error(`Failed to create reminder for user ${userId}:`, err);
-    await ctx.editMessageText(t(lang, 'failed'));
+    await ctx.editMessageText(t(lang, 'failed')).catch(() => {});
   }
 
   clearSession(userId);
-  await ctx.answerCbQuery();
+  await ctx.answerCbQuery().catch(() => {});
 }
 
 async function cancelReminderFlow(ctx) {
@@ -357,10 +359,10 @@ async function cancelReminderFlow(ctx) {
   clearSession(userId);
 
   if (ctx.callbackQuery) {
-    await ctx.editMessageText(t(lang, 'cancelled'));
-    await ctx.answerCbQuery();
+    await ctx.editMessageText(t(lang, 'cancelled')).catch(() => {});
+    await ctx.answerCbQuery().catch(() => {});
   } else {
-    await ctx.reply(t(lang, 'cancelled'));
+    await ctx.reply(t(lang, 'cancelled')).catch(() => {});
   }
 }
 
@@ -370,7 +372,7 @@ async function handleRecurrenceSelection(ctx) {
   const session = getSession(userId);
 
   if (!session || session.step !== 'await_recurrence') {
-    await ctx.answerCbQuery();
+    await ctx.answerCbQuery(t(lang, 'cancelled')).catch(() => {});
     return;
   }
 
@@ -383,8 +385,10 @@ async function handleRecurrenceSelection(ctx) {
   await ctx.editMessageText(t(lang, 'step_group'), {
     parse_mode: 'Markdown',
     ...groupResult.keyboard,
+  }).catch((err) => {
+    if (!err.message.includes('message is not modified')) throw err;
   });
-  await ctx.answerCbQuery();
+  await ctx.answerCbQuery().catch(() => {});
 }
 
 async function handleBack(ctx) {
@@ -408,23 +412,23 @@ async function handleBack(ctx) {
     await ctx.editMessageText(t(lang, 'step_time', {
       time1: now.clone().add(1, 'hour').format('HH:00'),
       time2: now.clone().add(1, 'hour').add(15, 'minutes').format('HH:15')
-    }), { parse_mode: 'Markdown' });
+    }), { parse_mode: 'Markdown', ...buildCancelKeyboard(lang) }).catch(() => {});
   } else if (session.step === 'await_recurrence') {
     const { buildRecurrenceKeyboard } = require('../keyboards/groupKeyboard');
     await ctx.editMessageText(t(lang, 'step_recurrence'), {
       parse_mode: 'Markdown',
       ...buildRecurrenceKeyboard(lang),
-    });
+    }).catch(() => {});
   } else if (session.step === 'await_group') {
     const { buildGroupKeyboard } = require('../keyboards/groupKeyboard');
     const groupResult = await buildGroupKeyboard(lang, userId);
     await ctx.editMessageText(t(lang, 'step_group'), {
       parse_mode: 'Markdown',
       ...groupResult.keyboard,
-    });
+    }).catch(() => {});
   }
 
-  await ctx.answerCbQuery();
+  await ctx.answerCbQuery().catch(() => {});
 }
 
 module.exports = {

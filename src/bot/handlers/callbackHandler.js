@@ -151,8 +151,12 @@ async function handleCallbacks(ctx) {
 
     await ctx.answerCbQuery();
   } catch (err) {
+    if (err.message && err.message.includes('message is not modified')) {
+      await ctx.answerCbQuery().catch(() => {});
+      return;
+    }
     logger.error(`Callback handler error for data="${data}":`, err);
-    await ctx.answerCbQuery(t(lang, 'error_occurred'));
+    await ctx.answerCbQuery(t(lang, 'error_occurred')).catch(() => {});
   }
 }
 
