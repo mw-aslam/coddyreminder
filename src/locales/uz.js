@@ -1,7 +1,7 @@
 module.exports = {
   start_greeting: "👋 *Salom, {name}!*",
   start_desc: "Men *Coddy Reminder* man — Sizga va guruhlaringizga rejalashtirilgan eslatmalar yuboraman.\n\n*Qisqacha:*\n1️⃣ Meni guruhingizga qo'shing yoki shu yerda ishlating\n2️⃣ /reminder buyrug'i bilan eslatma yarat\n3️⃣ Belgilangan vaqtda eslataman!\n\nBarcha buyruqlar: /help",
-  help_text: "📖 *Coddy Reminder — Yordam*\n\n*Buyruqlar:*\n/reminder — Yangi eslatma\n/myreminders — Eslatmalarim\n/delete — Eslatmani o'chirish\n/groups — Guruhlarim\n/settings — Sozlamalar\n/cancel — Bekor qilish",
+  help_text: "📖 *Coddy Reminder — Buyruqlar Qo'llanmasi*\n\n⏰ *Eslatmalar:*\n• /reminder — Yangi eslatma yaratish (bosqichma-bosqich)\n• /myreminders — Eslatmalarimni ko'rish va tahrirlash\n• /delete — Eslatmalarni o'chirish\n• 🎙 *Ovozli va matnli:* Ovoz yuboring yoki yozing: `bugun soat 15:28 ga demoday boladi`\n\n📝 *Vazifalar va Odatlar:*\n• `/todo Bozorlik qilish` — Vazifalar ro'yxatiga qo'shish\n• `/habits Kitob o'qish 30 min` — Kunlik odat yaratish (Streak 🔥)\n\n📅 *Eksport va Guruhlar:*\n• /export — Eslatmalarni Google/Apple Kalendarga yuklash (.ics)\n• /groups — Ulangan guruhlarni ko'rish\n• /settings — Til va avto-o'chirish sozlamalari\n• /cancel — Joriy amalni bekor qilish",
 
   step_text: "📝 *1-qadam / 5 — Eslatma matni*\n\nNima haqida eslatib o'tishim kerak?\n\nMasalan: _Loyihani topshirish_",
   step_text_error: "❌ Matn 1 dan 1000 belgigacha bo'lishi kerak.",

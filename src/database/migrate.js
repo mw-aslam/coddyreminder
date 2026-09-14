@@ -38,6 +38,14 @@ async function migrate() {
       ON CONFLICT DO NOTHING
     `);
     logger.info('user_groups backfill done.');
+
+    // Execute 003_add_habits_and_todos.sql
+    const habitsSqlPath = path.join(__dirname, 'migrations/003_add_habits_and_todos.sql');
+    if (fs.existsSync(habitsSqlPath)) {
+      const habitsSql = fs.readFileSync(habitsSqlPath, 'utf8');
+      await query(habitsSql);
+      logger.info('habits and todos tables migrated successfully.');
+    }
   } catch (err) {
     logger.error('Migration failed:', err);
     process.exit(1);

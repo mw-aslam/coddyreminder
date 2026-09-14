@@ -1,0 +1,24 @@
+-- 003_add_habits_and_todos.sql
+
+CREATE TABLE IF NOT EXISTS habits (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    title VARCHAR(550) NOT NULL,
+    streak INT DEFAULT 0,
+    last_completed_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS todos (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    text VARCHAR(1000) NOT NULL,
+    priority VARCHAR(50) DEFAULT 'medium',
+    completed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_habits_user_id ON habits(user_id);
+CREATE INDEX IF NOT EXISTS idx_todos_user_id ON todos(user_id);

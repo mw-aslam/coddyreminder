@@ -1,19 +1,32 @@
-const cron = require('node-cron');
 const { sendDueReminders } = require('../services/reminderService');
 const logger = require('../utils/logger');
 
 function startReminderJob(bot) {
-  // Run every 10 seconds for near-instant reminder delivery
-  const job = cron.schedule('* * * * * *', async () => {
+  let isRunning = false;
+
+  const checkReminders = async () => {
+    if (isRunning) return;
+    isRunning = true;
     try {
       await sendDueReminders(bot);
     } catch (err) {
       logger.error('Reminder job error:', err);
+    } finally {
+      isRunning = false;
     }
-  });
+  };
 
-  logger.info('Reminder cron job started (runs every 10 seconds)');
-  return job;
+  // Run immediately on start
+  checkReminders();
+
+  // High-precision poll every 500ms so reminders trigger instantly at target time :00
+  const interval = setInterval(checkReminders, 500);
+  interval.unref();
+
+  logger.info('Reminder job started (high-precision 500ms polling for instant delivery)');
+  return {
+    stop: () => clearInterval(interval),
+  };
 }
 
 module.exports = { startReminderJob };

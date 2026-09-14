@@ -32,6 +32,11 @@ async function reminderCommand(ctx) {
     await ctx.reply(t(lang, 'private_only'));
     return;
   }
+  
+  if (ctx.message) {
+    ctx.deleteMessage().catch(() => {});
+  }
+  
   await reminderHandler.startReminderFlow(ctx);
 }
 
@@ -131,6 +136,12 @@ async function groupsCommand(ctx) {
       message += `📅 ${new Date(g.created_at).toLocaleDateString('ru-RU')}\n\n`;
     }
 
+    const tip = lang === 'uz'
+      ? `💡 *Maslahat:* Agar bot boshqa guruhlaringizda ham bor bo'lsa, lekin u ushbu ro'yxatda ko'rinmayotgan bo'lsa — o'sha guruhlarda ixtiyoriy komandani (masalan /help) bir marta yuboring, bot guruhni darhol ro'yxatga oladi!`
+      : `💡 *Совет:* Если бот добавлен в другие ваши группы, но их нет в списке — просто отправьте любую команду (например /help) в этих группах, и бот автоматически их зарегистрирует!`;
+
+    message += `\n${tip}`;
+
     await ctx.reply(message, { parse_mode: 'Markdown' });
   } catch (err) {
     logger.error(`Groups command error for user ${ctx.from.id}:`, err);
@@ -143,6 +154,10 @@ async function settingsCommand(ctx) {
   if (ctx.chat.type !== 'private') {
     await ctx.reply(t(lang, 'private_only'));
     return;
+  }
+
+  if (ctx.message) {
+    ctx.deleteMessage().catch(() => {});
   }
 
   const user = ctx.dbUser;

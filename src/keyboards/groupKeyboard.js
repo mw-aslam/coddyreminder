@@ -2,6 +2,11 @@ const { Markup } = require('telegraf');
 const groupService = require('../services/groupService');
 const { t } = require('../locales');
 
+function buildCancelKeyboard(lang = 'ru') {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback(t(lang, 'btn_cancel'), 'cancel_reminder')]
+  ]);
+}
 function buildGroupKeyboard(lang = 'ru', userId) {
   return groupService.getUserActiveGroups(userId).then(groups => {
     const buttons = [];
@@ -103,4 +108,5 @@ module.exports = {
   buildDeleteConfirmKeyboard,
   buildSettingsKeyboard,
   buildAutoDeleteKeyboard,
+  buildCancelKeyboard,
 };

@@ -9,6 +9,23 @@ async function handleCallbacks(ctx) {
   const lang = ctx.dbUser?.language || 'ru';
 
   try {
+    if (data.startsWith('snooze:')) {
+      await handleSnoozeCallback(ctx, data);
+      return;
+    }
+
+    if (data.startsWith('todo:')) {
+      const todoHandler = require('./todoHandler');
+      await todoHandler.handleTodoCallback(ctx);
+      return;
+    }
+
+    if (data.startsWith('habit:')) {
+      const habitHandler = require('./habitHandler');
+      await habitHandler.handleHabitCallback(ctx);
+      return;
+    }
+
     if (data.startsWith('select_group:')) {
       await reminderHandler.handleGroupSelection(ctx);
       return;
@@ -76,8 +93,9 @@ async function handleCallbacks(ctx) {
         userMiddleware.updateCache(ctx.from.id, { language: newLang });
       }
 
-      await showSettingsMenu(ctx, newLang);
-      await ctx.answerCbQuery(t(newLang, 'settings_lang_updated'));
+      const msg = t(newLang, 'settings_lang_updated');
+      await ctx.editMessageText(msg).catch(()=>{});
+      await ctx.answerCbQuery();
       return;
     }
 
@@ -93,11 +111,10 @@ async function handleCallbacks(ctx) {
       }
 
       const langNow = ctx.dbUser?.language || 'ru';
-      const minLabel = langNow === 'uz' ? 'daq' : langNow === 'en' ? 'min' : 'мин';
-      const msg = `✅ ${minutes} ${minLabel}`;
-          
-      await showSettingsMenu(ctx, langNow);
-      await ctx.answerCbQuery(msg);
+      const msg = t(langNow, 'autodelete_set', { min: minutes });
+      
+      await ctx.editMessageText(msg, { parse_mode: 'Markdown' }).catch(()=>{});
+      await ctx.answerCbQuery();
       return;
     }
 
@@ -112,10 +129,17 @@ async function handleCallbacks(ctx) {
       // Set session to wait for custom input
       const session = reminderHandler.getSession(ctx.from.id);
       session.step = 'await_autodelete_custom';
-      await ctx.editMessageText(t(lang, 'autodelete_custom_prompt'), {
-        parse_mode: 'Markdown',
-        ...require('../../keyboards/groupKeyboard').buildAutoDeleteKeyboard(lang)
-      });
+      session.promptMsgId = ctx.callbackQuery.message.message_id;
+      try {
+        await ctx.editMessageText(t(lang, 'autodelete_custom_prompt'), {
+          parse_mode: 'Markdown',
+          ...buildAutoDeleteKeyboard(lang)
+        });
+      } catch (err) {
+        if (!err.message.includes('message is not modified')) {
+          throw err;
+        }
+      }
       await ctx.answerCbQuery();
       return;
     }
@@ -236,6 +260,40 @@ async function showSettingsMenu(ctx, lang) {
       ...buildSettingsKeyboard(lang),
     }
   );
+}
+
+async function handleSnoozeCallback(ctx, data) {
+  const parts = data.split(':');
+  const action = parts[1];
+  const reminderId = parseInt(parts[2], 10);
+  const reminderRepository = require('../../database/repositories/reminderRepository');
+
+  const reminder = await reminderService.getReminderById(reminderId);
+  if (!reminder) {
+    await ctx.answerCbQuery('⚠️ Напоминание не найдено.');
+    return;
+  }
+
+  if (action === 'done') {
+    await reminderRepository.updateReminderStatus(reminderId, 'sent');
+    await ctx.editMessageText('✅ *Отлично! Напоминание отмечено выполненным.*', { parse_mode: 'Markdown' }).catch(() => {});
+    await ctx.answerCbQuery('✅ Выполнено!');
+    return;
+  }
+
+  let newTime = new Date();
+  if (action === '15') {
+    newTime = new Date(Date.now() + 15 * 60 * 1000);
+  } else if (action === '60') {
+    newTime = new Date(Date.now() + 60 * 60 * 1000);
+  } else if (action === 'tomorrow') {
+    newTime = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  }
+
+  await reminderRepository.updateReminder(reminderId, { remind_at: newTime, status: 'pending' });
+  const timeStr = newTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  await ctx.editMessageText(`⏰ *Перенесено на ${timeStr}!*`, { parse_mode: 'Markdown' }).catch(() => {});
+  await ctx.answerCbQuery(`⏰ Перенесено!`);
 }
 
 module.exports = { handleCallbacks };

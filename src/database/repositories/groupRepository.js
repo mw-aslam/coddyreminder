@@ -72,18 +72,13 @@ async function getUserActiveGroups(userId) {
     return localStore.getUserActiveGroups(userId);
   }
 
-  // Show groups where:
-  // 1) user is tracked in user_groups (new method), OR
-  // 2) user was the one who added the bot (old fallback)
+  // Return all active groups where the bot is present
   const result = await query(
     `SELECT DISTINCT g.*
      FROM groups g
-     LEFT JOIN user_groups ug ON g.telegram_group_id = ug.group_id AND ug.user_id = $1
      WHERE g.is_active = TRUE
        AND g.telegram_group_id::bigint < 0
-       AND (ug.user_id = $1 OR g.added_by::bigint = $1)
-     ORDER BY g.created_at DESC`,
-    [userId]
+     ORDER BY g.created_at DESC`
   );
   return result.rows;
 }

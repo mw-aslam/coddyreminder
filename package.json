@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "npm run migrate && node src/index.js",
-    "dev": "nodemon --ignore logs/ src/index.js",
+    "dev": "nodemon --ignore logs/ --ignore data/ src/index.js",
     "migrate": "node src/database/migrate.js"
   },
   "dependencies": {

@@ -10,11 +10,15 @@ function emptyDatabase() {
       groups: 1,
       users: 1,
       reminders: 1,
+      habits: 1,
+      todos: 1,
     },
     groups: [],
     users: [],
     reminders: [],
     user_groups: [],
+    habits: [],
+    todos: [],
   };
 }
 
@@ -54,6 +58,8 @@ function loadDatabase() {
   data.users = Array.isArray(data.users) ? data.users : [];
   data.reminders = Array.isArray(data.reminders) ? data.reminders : [];
   data.user_groups = Array.isArray(data.user_groups) ? data.user_groups : [];
+  data.habits = Array.isArray(data.habits) ? data.habits : [];
+  data.todos = Array.isArray(data.todos) ? data.todos : [];
 
   return data;
 }
@@ -192,10 +198,7 @@ async function getGroupById(telegramGroupId) {
 async function getUserActiveGroups(userId) {
   const data = loadDatabase();
   const groups = data.groups.filter((group) => {
-    if (group.is_active !== true || Number(group.telegram_group_id) >= 0) return false;
-
-    const joined = data.user_groups.some((row) => sameId(row.user_id, userId) && sameId(row.group_id, group.telegram_group_id));
-    return joined || sameId(group.added_by, userId);
+    return group.is_active === true && Number(group.telegram_group_id) < 0;
   });
 
   return clone(sortByCreatedDesc(groups));
@@ -311,6 +314,110 @@ async function deleteReminder(id, userId) {
   return clone(reminder);
 }
 
+// Habits
+async function createHabit({ userId, title }) {
+  const data = loadDatabase();
+  const timestamp = now();
+  const habit = {
+    id: data.sequences.habits++,
+    user_id: userId,
+    title,
+    streak: 0,
+    last_completed_at: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+  data.habits.push(habit);
+  saveDatabase(data);
+  return clone(habit);
+}
+
+async function getUserHabits(userId) {
+  const data = loadDatabase();
+  const rows = data.habits.filter((r) => sameId(r.user_id, userId));
+  return clone(sortByCreatedDesc(rows));
+}
+
+async function completeHabit(id, userId) {
+  const data = loadDatabase();
+  const habit = data.habits.find((r) => sameId(r.id, id) && sameId(r.user_id, userId));
+  if (!habit) return null;
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const lastStr = habit.last_completed_at ? new Date(habit.last_completed_at).toISOString().split('T')[0] : null;
+
+  if (lastStr === todayStr) {
+    return clone(habit); // already completed today
+  }
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+  if (lastStr === yesterdayStr) {
+    habit.streak += 1;
+  } else {
+    habit.streak = 1;
+  }
+
+  habit.last_completed_at = now();
+  habit.updated_at = now();
+  saveDatabase(data);
+  return clone(habit);
+}
+
+async function deleteHabit(id, userId) {
+  const data = loadDatabase();
+  const idx = data.habits.findIndex((r) => sameId(r.id, id) && sameId(r.user_id, userId));
+  if (idx === -1) return false;
+  data.habits.splice(idx, 1);
+  saveDatabase(data);
+  return true;
+}
+
+// Todos
+async function createTodo({ userId, text, priority = 'medium' }) {
+  const data = loadDatabase();
+  const timestamp = now();
+  const todo = {
+    id: data.sequences.todos++,
+    user_id: userId,
+    text,
+    priority,
+    completed: false,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+  data.todos.push(todo);
+  saveDatabase(data);
+  return clone(todo);
+}
+
+async function getUserTodos(userId) {
+  const data = loadDatabase();
+  const rows = data.todos.filter((r) => sameId(r.user_id, userId));
+  return clone(sortByCreatedDesc(rows));
+}
+
+async function toggleTodo(id, userId) {
+  const data = loadDatabase();
+  const todo = data.todos.find((r) => sameId(r.id, id) && sameId(r.user_id, userId));
+  if (!todo) return null;
+  todo.completed = !todo.completed;
+  todo.updated_at = now();
+  saveDatabase(data);
+  return clone(todo);
+}
+
+async function deleteTodo(id, userId) {
+  const data = loadDatabase();
+  const idx = data.todos.findIndex((r) => sameId(r.id, id) && sameId(r.user_id, userId));
+  if (idx === -1) return false;
+  data.todos.splice(idx, 1);
+  saveDatabase(data);
+  return true;
+}
+
 module.exports = {
   databasePath,
   testConnection,
@@ -330,4 +437,12 @@ module.exports = {
   getReminderById,
   updateReminderStatus,
   deleteReminder,
+  createHabit,
+  getUserHabits,
+  completeHabit,
+  deleteHabit,
+  createTodo,
+  getUserTodos,
+  toggleTodo,
+  deleteTodo,
 };

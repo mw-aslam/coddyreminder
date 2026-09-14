@@ -45,6 +45,7 @@ function calculateNextOccurrence(currentRemindAt, recurrence, timezone = 'Asia/T
   return nextDate.toDate();
 }
 
+
 async function sendReminder(bot, reminder) {
   try {
     const date = new Date(reminder.remind_at);

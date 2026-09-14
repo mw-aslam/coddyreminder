@@ -1,5 +1,5 @@
 const { parseDate, parseTime, combineDateAndTime, isFuture } = require('../utils/dateParser');
-const { buildGroupKeyboard, buildConfirmKeyboard } = require('../keyboards/groupKeyboard');
+const { buildGroupKeyboard, buildConfirmKeyboard, buildCancelKeyboard } = require('../keyboards/groupKeyboard');
 const reminderService = require('../services/reminderService');
 const logger = require('../utils/logger');
 const { t } = require('../locales');
@@ -20,6 +20,20 @@ function clearSession(userId) {
   sessions.delete(userId);
 }
 
+async function sendOrEditPrompt(ctx, session, text, extra = {}) {
+  if (session.promptMsgId) {
+    try {
+      await ctx.telegram.editMessageText(ctx.chat.id, session.promptMsgId, undefined, text, extra);
+    } catch (e) {
+      const msg = await ctx.reply(text, extra);
+      session.promptMsgId = msg.message_id;
+    }
+  } else {
+    const msg = await ctx.reply(text, extra);
+    session.promptMsgId = msg.message_id;
+  }
+}
+
 async function startReminderFlow(ctx) {
   const userId = ctx.from.id;
   const lang = getLang(ctx);
@@ -27,7 +41,12 @@ async function startReminderFlow(ctx) {
   const session = getSession(userId);
   session.step = 'await_text';
   session.history = [];
-  await ctx.reply(t(lang, 'step_text'), { parse_mode: 'Markdown' });
+  
+  if (ctx.message) {
+    ctx.deleteMessage().catch(() => {});
+  }
+  
+  await sendOrEditPrompt(ctx, session, t(lang, 'step_text'), { parse_mode: 'Markdown', ...buildCancelKeyboard(lang) });
 }
 
 async function handleReminderStep(ctx) {
@@ -38,11 +57,15 @@ async function handleReminderStep(ctx) {
   if (!session || !session.step) return false;
 
   const text = ctx.message.text.trim();
+  
+  if (ctx.message) {
+    ctx.deleteMessage().catch(() => {});
+  }
 
   switch (session.step) {
     case 'await_text': {
       if (text.length < 1 || text.length > 1000) {
-        await ctx.reply(t(lang, 'step_text_error'));
+        await sendOrEditPrompt(ctx, session, t(lang, 'step_text_error'), { parse_mode: 'Markdown', ...buildCancelKeyboard(lang) });
         return true;
       }
       session.reminderText = text;
@@ -53,10 +76,10 @@ async function handleReminderStep(ctx) {
       const timezone = ctx.dbUser?.timezone || 'Asia/Tashkent';
       const now = moment().tz(timezone);
       
-      await ctx.reply(t(lang, 'step_date', {
+      await sendOrEditPrompt(ctx, session, t(lang, 'step_date', {
         today: now.format('DD.MM.YYYY'),
         today_iso: now.format('YYYY-MM-DD')
-      }), { parse_mode: 'Markdown' });
+      }), { parse_mode: 'Markdown', ...buildCancelKeyboard(lang) });
       return true;
     }
 
@@ -67,19 +90,19 @@ async function handleReminderStep(ctx) {
       const now = moment().tz(timezone);
 
       if (!parsed) {
-        await ctx.reply(t(lang, 'step_date_error', {
+        await sendOrEditPrompt(ctx, session, t(lang, 'step_date_error', {
           today: now.format('DD.MM.YYYY')
-        }), { parse_mode: 'Markdown' });
+        }), { parse_mode: 'Markdown', ...buildCancelKeyboard(lang) });
         return true;
       }
       session.date = parsed;
       session.step = 'await_time';
       session.history.push({ step: 'await_date', msg: text });
       
-      await ctx.reply(t(lang, 'step_time', {
+      await sendOrEditPrompt(ctx, session, t(lang, 'step_time', {
         time1: now.clone().add(1, 'hour').format('HH:00'),
         time2: now.clone().add(1, 'hour').add(15, 'minutes').format('HH:15')
-      }), { parse_mode: 'Markdown' });
+      }), { parse_mode: 'Markdown', ...buildCancelKeyboard(lang) });
       return true;
     }
 
@@ -89,9 +112,9 @@ async function handleReminderStep(ctx) {
         const moment = require('moment-timezone');
         const timezone = ctx.dbUser?.timezone || 'Asia/Tashkent';
         const now = moment().tz(timezone);
-        await ctx.reply(t(lang, 'step_time_error', {
+        await sendOrEditPrompt(ctx, session, t(lang, 'step_time_error', {
           time1: now.clone().add(1, 'hour').format('HH:00')
-        }), { parse_mode: 'Markdown' });
+        }), { parse_mode: 'Markdown', ...buildCancelKeyboard(lang) });
         return true;
       }
 
@@ -99,7 +122,7 @@ async function handleReminderStep(ctx) {
       const remindAt = combineDateAndTime(session.date, timeObj, timezone);
 
       if (!isFuture(remindAt)) {
-        await ctx.reply(t(lang, 'step_time_past_error'));
+        await sendOrEditPrompt(ctx, session, t(lang, 'step_time_past_error'), { parse_mode: 'Markdown', ...buildCancelKeyboard(lang) });
         session.step = 'await_date';
         return true;
       }
@@ -109,7 +132,7 @@ async function handleReminderStep(ctx) {
       session.history.push({ step: 'await_time', msg: text });
 
       const { buildRecurrenceKeyboard } = require('../keyboards/groupKeyboard');
-      await ctx.reply(t(lang, 'step_recurrence'), {
+      await sendOrEditPrompt(ctx, session, t(lang, 'step_recurrence'), {
         parse_mode: 'Markdown',
         ...buildRecurrenceKeyboard(lang),
       });
@@ -118,11 +141,11 @@ async function handleReminderStep(ctx) {
 
     case 'edit_text': {
       if (text.length < 1 || text.length > 1000) {
-        await ctx.reply(t(lang, 'step_text_error'));
+        await sendOrEditPrompt(ctx, session, t(lang, 'step_text_error'), { parse_mode: 'Markdown' });
         return true;
       }
       await reminderService.updateReminder(session.editReminderId, { text });
-      await ctx.reply(t(lang, 'edit_success'));
+      await sendOrEditPrompt(ctx, session, t(lang, 'edit_success'), { parse_mode: 'Markdown' });
       clearSession(userId);
       return true;
     }
@@ -131,7 +154,7 @@ async function handleReminderStep(ctx) {
       const timezone = ctx.dbUser?.timezone || 'Asia/Tashkent';
       const parsed = parseDate(text, timezone);
       if (!parsed) {
-        await ctx.reply(t(lang, 'step_date_error', { today: 'today' }), { parse_mode: 'Markdown' });
+        await sendOrEditPrompt(ctx, session, t(lang, 'step_date_error', { today: 'today' }), { parse_mode: 'Markdown', ...buildCancelKeyboard(lang) });
         return true;
       }
       
@@ -140,15 +163,21 @@ async function handleReminderStep(ctx) {
       
       const moment = require('moment-timezone');
       const currentRemindAt = moment(existing.remind_at).tz(timezone);
-      const newRemindAt = combineDateAndTime(parsed, { hours: currentRemindAt.hours(), minutes: currentRemindAt.minutes() }, timezone);
+      // parsed is a moment object from parseDate, use it directly
+      const newRemindAt = parsed.clone().set({ 
+        hour: currentRemindAt.hours(), 
+        minute: currentRemindAt.minutes(), 
+        second: 0, 
+        millisecond: 0 
+      });
       
       if (!isFuture(newRemindAt)) {
-        await ctx.reply(t(lang, 'step_time_past_error'));
+        await sendOrEditPrompt(ctx, session, t(lang, 'step_time_past_error'), { parse_mode: 'Markdown', ...buildCancelKeyboard(lang) });
         return true;
       }
       
       await reminderService.updateReminder(session.editReminderId, { remind_at: newRemindAt.toDate() });
-      await ctx.reply(t(lang, 'edit_success'));
+      await sendOrEditPrompt(ctx, session, t(lang, 'edit_success'), { parse_mode: 'Markdown' });
       clearSession(userId);
       return true;
     }
@@ -156,7 +185,7 @@ async function handleReminderStep(ctx) {
     case 'edit_time': {
       const timeObj = parseTime(text);
       if (!timeObj) {
-        await ctx.reply(t(lang, 'step_time_error', { time1: '12:00' }), { parse_mode: 'Markdown' });
+        await sendOrEditPrompt(ctx, session, t(lang, 'step_time_error', { time1: '12:00' }), { parse_mode: 'Markdown', ...buildCancelKeyboard(lang) });
         return true;
       }
 
@@ -167,19 +196,21 @@ async function handleReminderStep(ctx) {
       const moment = require('moment-timezone');
       const currentRemindAt = moment(existing.remind_at).tz(timezone);
       
-      const newRemindAt = combineDateAndTime({
-        year: currentRemindAt.year(),
-        month: currentRemindAt.month(),
-        date: currentRemindAt.date()
-      }, timeObj, timezone);
+      // Use the moment object directly with .clone().set()
+      const newRemindAt = currentRemindAt.clone().set({
+        hour: timeObj.hours,
+        minute: timeObj.minutes,
+        second: 0,
+        millisecond: 0
+      });
       
       if (!isFuture(newRemindAt)) {
-        await ctx.reply(t(lang, 'step_time_past_error'));
+        await sendOrEditPrompt(ctx, session, t(lang, 'step_time_past_error'), { parse_mode: 'Markdown', ...buildCancelKeyboard(lang) });
         return true;
       }
       
       await reminderService.updateReminder(session.editReminderId, { remind_at: newRemindAt.toDate() });
-      await ctx.reply(t(lang, 'edit_success'));
+      await sendOrEditPrompt(ctx, session, t(lang, 'edit_success'), { parse_mode: 'Markdown' });
       clearSession(userId);
       return true;
     }
@@ -187,7 +218,7 @@ async function handleReminderStep(ctx) {
     case 'await_autodelete_custom': {
       const minutes = parseInt(text);
       if (isNaN(minutes) || minutes < 1 || minutes > 10080) {
-        await ctx.reply(t(lang, 'autodelete_invalid'));
+        await sendOrEditPrompt(ctx, session, t(lang, 'autodelete_invalid'), { parse_mode: 'Markdown' });
         return true;
       }
       const seconds = minutes * 60;
@@ -198,8 +229,20 @@ async function handleReminderStep(ctx) {
       if (userMiddleware.updateCache) {
         userMiddleware.updateCache(userId, { auto_delete_duration: seconds });
       }
+      
+      const promptMsgId = session.promptMsgId;
       clearSession(userId);
-      await ctx.reply(t(lang, 'autodelete_set', { min: minutes }), { parse_mode: 'Markdown' });
+
+      if (ctx.message) {
+        ctx.deleteMessage().catch(() => {});
+      }
+
+      const msg = t(lang, 'autodelete_set', { min: minutes });
+      if (promptMsgId) {
+        await ctx.telegram.editMessageText(ctx.chat.id, promptMsgId, undefined, msg, { parse_mode: 'Markdown' }).catch(() => {});
+      } else {
+        await ctx.reply(msg, { parse_mode: 'Markdown' });
+      }
       return true;
     }
 

@@ -4,6 +4,10 @@ const config = {
   bot: {
     token: process.env.BOT_TOKEN,
   },
+  ai: {
+    groqApiKey: process.env.GROQ_API_KEY,
+    openaiApiKey: process.env.OPENAI_API_KEY,
+  },
   database: {
     adapter: process.env.DB_ADAPTER || 'postgres',
     connectionString: process.env.DATABASE_URL,

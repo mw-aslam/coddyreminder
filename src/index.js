@@ -2,6 +2,7 @@ require('dotenv').config();
 const { createBot } = require('./bot');
 const { testConnection } = require('./database/db');
 const { startReminderJob } = require('./jobs/reminderJob');
+const { startDigestJob } = require('./jobs/digestJob');
 const logger = require('./utils/logger');
 const fs = require('fs');
 
@@ -24,8 +25,9 @@ async function main() {
   // Create and launch bot
   const bot = createBot();
 
-  // Start reminder delivery job
+  // Start reminder delivery job & morning digest job
   startReminderJob(bot);
+  startDigestJob(bot);
 
   // Graceful shutdown
   const shutdown = async (signal) => {
@@ -36,6 +38,16 @@ async function main() {
 
   process.once('SIGINT', () => shutdown('SIGINT'));
   process.once('SIGTERM', () => shutdown('SIGTERM'));
+
+  // Launch lightweight HTTP server for Render health checks
+  const http = require('http');
+  const port = process.env.PORT || 3000;
+  http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('ReminderFlow Bot is running!\n');
+  }).listen(port, () => {
+    logger.info(`Health check server running on port ${port}`);
+  });
 
   // Launch polling
   await bot.launch();
