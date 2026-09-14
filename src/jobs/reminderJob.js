@@ -3,6 +3,7 @@ const logger = require('../utils/logger');
 
 function startReminderJob(bot) {
   let isRunning = false;
+  let lastErrorTime = 0;
 
   const checkReminders = async () => {
     if (isRunning) return;
@@ -10,7 +11,11 @@ function startReminderJob(bot) {
     try {
       await sendDueReminders(bot);
     } catch (err) {
-      logger.error('Reminder job error:', err);
+      const now = Date.now();
+      if (now - lastErrorTime > 60000) {
+        logger.error('Reminder job error:', err.message || err);
+        lastErrorTime = now;
+      }
     } finally {
       isRunning = false;
     }

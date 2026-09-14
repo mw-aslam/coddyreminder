@@ -63,11 +63,15 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
-CREATE OR REPLACE TRIGGER update_groups_updated_at BEFORE UPDATE ON groups
+DROP TRIGGER IF EXISTS update_groups_updated_at ON groups;
+CREATE TRIGGER update_groups_updated_at BEFORE UPDATE ON groups
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE OR REPLACE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE OR REPLACE TRIGGER update_reminders_updated_at BEFORE UPDATE ON reminders
+DROP TRIGGER IF EXISTS update_reminders_updated_at ON reminders;
+CREATE TRIGGER update_reminders_updated_at BEFORE UPDATE ON reminders
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+

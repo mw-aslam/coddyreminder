@@ -22,33 +22,50 @@ async function runMigrations() {
   const schema = fs.readFileSync(schemaPath, 'utf8');
 
   try {
+    // 1. Run schema creation
     await query(schema);
-    logger.info('Migration completed successfully.');
+    logger.info('Primary schema tables and functions created successfully.');
 
-    // Add new columns to existing tables
-    await query(`ALTER TABLE reminders ADD COLUMN IF NOT EXISTS recurrence VARCHAR(50) DEFAULT 'none'`);
+    // 2. Ensure recurrence column exists in reminders table
+    try {
+      await query(`ALTER TABLE reminders ADD COLUMN IF NOT EXISTS recurrence VARCHAR(50) DEFAULT 'none'`);
+    } catch (e) {
+      logger.warn('Recurrence column migration notice:', e.message);
+    }
 
-    // Drop foreign key constraints so personal chat reminders work without FK errors
-    await query(`ALTER TABLE reminders DROP CONSTRAINT IF EXISTS reminders_group_id_fkey`);
-    await query(`ALTER TABLE user_groups DROP CONSTRAINT IF EXISTS user_groups_group_id_fkey`);
+    // 3. Drop foreign key constraints if any exist
+    try {
+      await query(`ALTER TABLE reminders DROP CONSTRAINT IF EXISTS reminders_group_id_fkey`);
+      await query(`ALTER TABLE user_groups DROP CONSTRAINT IF EXISTS user_groups_group_id_fkey`);
+    } catch (e) {
+      logger.warn('Constraint drop notice:', e.message);
+    }
 
-    // Backfill user_groups from existing groups
-    await query(`
-      INSERT INTO user_groups (user_id, group_id)
-      SELECT added_by, telegram_group_id
-      FROM groups
-      WHERE added_by IS NOT NULL
-        AND telegram_group_id::bigint < 0
-      ON CONFLICT DO NOTHING
-    `);
-    logger.info('user_groups backfill done.');
+    // 4. Backfill user_groups from existing groups
+    try {
+      await query(`
+        INSERT INTO user_groups (user_id, group_id)
+        SELECT added_by, telegram_group_id
+        FROM groups
+        WHERE added_by IS NOT NULL
+          AND telegram_group_id::bigint < 0
+        ON CONFLICT DO NOTHING
+      `);
+      logger.info('user_groups backfill done.');
+    } catch (e) {
+      logger.warn('user_groups backfill notice:', e.message);
+    }
 
-    // Execute 003_add_habits_and_todos.sql
+    // 5. Execute 003_add_habits_and_todos.sql
     const habitsSqlPath = path.join(__dirname, 'migrations/003_add_habits_and_todos.sql');
     if (fs.existsSync(habitsSqlPath)) {
-      const habitsSql = fs.readFileSync(habitsSqlPath, 'utf8');
-      await query(habitsSql);
-      logger.info('habits and todos tables migrated successfully.');
+      try {
+        const habitsSql = fs.readFileSync(habitsSqlPath, 'utf8');
+        await query(habitsSql);
+        logger.info('habits and todos tables migrated successfully.');
+      } catch (e) {
+        logger.warn('habits and todos migration notice:', e.message);
+      }
     }
     return true;
   } catch (err) {
