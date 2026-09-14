@@ -98,6 +98,29 @@ async function testConnection() {
   try {
     const result = await query('SELECT NOW()');
     logger.info('Database connection successful:', result.rows[0].now);
+
+    // Auto-initialize SQL schema & tables if missing
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const schemaPath = path.join(__dirname, '../../schema.sql');
+      if (fs.existsSync(schemaPath)) {
+        const schema = fs.readFileSync(schemaPath, 'utf8');
+        await query(schema);
+        await query(`ALTER TABLE reminders ADD COLUMN IF NOT EXISTS recurrence VARCHAR(50) DEFAULT 'none'`);
+        await query(`ALTER TABLE reminders DROP CONSTRAINT IF EXISTS reminders_group_id_fkey`);
+        await query(`ALTER TABLE user_groups DROP CONSTRAINT IF EXISTS user_groups_group_id_fkey`);
+        const habitsSqlPath = path.join(__dirname, 'migrations/003_add_habits_and_todos.sql');
+        if (fs.existsSync(habitsSqlPath)) {
+          const habitsSql = fs.readFileSync(habitsSqlPath, 'utf8');
+          await query(habitsSql);
+        }
+        logger.info('Auto-migration executed successfully on startup.');
+      }
+    } catch (migErr) {
+      logger.warn('Auto-migration warning:', migErr.message);
+    }
+
     return true;
   } catch (err) {
     logger.error(`Database connection failed: ${getDatabaseConnectionHint(err)}`);
