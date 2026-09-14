@@ -6,6 +6,8 @@ const { startDigestJob } = require('./jobs/digestJob');
 const logger = require('./utils/logger');
 const fs = require('fs');
 
+const { runMigrations } = require('./database/migrate');
+
 // Ensure logs directory exists
 if (!fs.existsSync('logs')) {
   fs.mkdirSync('logs');
@@ -18,9 +20,11 @@ async function main() {
   const dbOk = await testConnection();
   if (!dbOk) {
     logger.error('Database connection failed. Fix DATABASE_URL or DB_* settings first.');
-    logger.error('After the connection works, run: npm run migrate');
     process.exit(1);
   }
+
+  // Auto-run DB migrations (creates tables if missing)
+  await runMigrations();
 
   // Create and launch bot
   const bot = createBot();

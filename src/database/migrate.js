@@ -4,18 +4,18 @@ const path = require('path');
 const { query, testConnection, isJsonAdapter } = require('./db');
 const logger = require('../utils/logger');
 
-async function migrate() {
+async function runMigrations() {
   logger.info('Starting database migration...');
 
   const connected = await testConnection();
   if (!connected) {
-    logger.error('Cannot connect to database. Exiting.');
-    process.exit(1);
+    logger.error('Cannot connect to database.');
+    return false;
   }
 
   if (isJsonAdapter) {
     logger.info('Local JSON database does not require SQL migrations.');
-    process.exit(0);
+    return true;
   }
 
   const schemaPath = path.join(__dirname, '../../schema.sql');
@@ -28,7 +28,7 @@ async function migrate() {
     // Add new columns to existing tables
     await query(`ALTER TABLE reminders ADD COLUMN IF NOT EXISTS recurrence VARCHAR(50) DEFAULT 'none'`);
 
-    // Backfill user_groups from existing groups (for groups already added before this feature)
+    // Backfill user_groups from existing groups
     await query(`
       INSERT INTO user_groups (user_id, group_id)
       SELECT added_by, telegram_group_id
@@ -46,12 +46,17 @@ async function migrate() {
       await query(habitsSql);
       logger.info('habits and todos tables migrated successfully.');
     }
+    return true;
   } catch (err) {
     logger.error('Migration failed:', err);
-    process.exit(1);
+    return false;
   }
-
-  process.exit(0);
 }
 
-migrate();
+if (require.main === module) {
+  runMigrations().then((success) => {
+    process.exit(success ? 0 : 1);
+  });
+}
+
+module.exports = { runMigrations };
