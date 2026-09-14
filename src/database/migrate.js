@@ -28,6 +28,10 @@ async function runMigrations() {
     // Add new columns to existing tables
     await query(`ALTER TABLE reminders ADD COLUMN IF NOT EXISTS recurrence VARCHAR(50) DEFAULT 'none'`);
 
+    // Drop foreign key constraints so personal chat reminders work without FK errors
+    await query(`ALTER TABLE reminders DROP CONSTRAINT IF EXISTS reminders_group_id_fkey`);
+    await query(`ALTER TABLE user_groups DROP CONSTRAINT IF EXISTS user_groups_group_id_fkey`);
+
     // Backfill user_groups from existing groups
     await query(`
       INSERT INTO user_groups (user_id, group_id)

@@ -36,8 +36,7 @@ CREATE TABLE IF NOT EXISTS reminders (
   status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'deleted', 'cancelled')),
   sent_message_id BIGINT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  FOREIGN KEY (group_id) REFERENCES groups(telegram_group_id) ON DELETE CASCADE
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_reminders_status ON reminders(status);
@@ -49,8 +48,7 @@ CREATE TABLE IF NOT EXISTS user_groups (
   user_id BIGINT NOT NULL,
   group_id BIGINT NOT NULL,
   joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  PRIMARY KEY (user_id, group_id),
-  FOREIGN KEY (group_id) REFERENCES groups(telegram_group_id) ON DELETE CASCADE
+  PRIMARY KEY (user_id, group_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_groups_user_id ON user_groups(user_id);
